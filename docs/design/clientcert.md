@@ -27,14 +27,12 @@ The Build/Release agent is just xplat tool runner, base on what user defined in 
 
 You can use `OpenSSL` to get all pre-required certificates format ready easily as long as you have all pieces of information.
 
-#### Windows
+### Windows
 
-    Windows has a pretty good built-in certificate manger, the `Windows Certificate Manager`, it will make most Windows based application deal with certificate problem easily. However, most Linux background application (Git) and technologies (Node.js) won't check the `Windows Certificate Manager`, they just expect all certificates are just a file on disk.  
-    1. Export CA certificate from `Trusted CA Store`, use `Base64 Encoding X.509 (.CER)` format.
-    2. 
+Windows has a pretty good built-in certificate manger, the `Windows Certificate Manager`, it will make most Windows based application deal with certificate problem easily. However, most Linux background application (Git) and technologies (Node.js) won't check the `Windows Certificate Manager`, they just expect all certificates are just a file on disk.  
+    - Export CA certificate from `Trusted CA Store`, use `Base64 Encoding X.509 (.CER)` format.
+
     
-In short:  
-Agent version 2.121.0 or above  
   - Pass `--proxyurl`, `--proxyusername` and `--proxypassword` during agent configuration.   
     Ex:
     ```
