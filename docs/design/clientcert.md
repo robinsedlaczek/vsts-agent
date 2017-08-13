@@ -7,9 +7,32 @@
   - Provide documentation and scripts to help customer prepare all pre-requrements before configuration
   - Expose ssl client certificate information in vsts-task-lib for task author
 
-## Configuration
+## Pre-requirements
 
-Documentation for configuring agent to follow web proxy can be found [here](https://www.visualstudio.com/en-us/docs/build/actions/agents/v2-windows#how-do-i-configure-the-agent-to-work-through-a-web-proxy-and-connect-to-team-services).  
+  - CA root certificate in `.pem` format (This should contains the public key and signature of the CA root certificate)  
+  - Client certificate in `.pem` format (This should contains the public key and signature of the Client certificate)  
+  - Client certificate private key in `.pem` format (This should contains only the private key of the Client certificate)  
+  - Client certificate archive package in `.pfx` format (This should contains the signature, public key and private key of the Client certificate)  
+  - Use `SAME` password to protect Client certificate private key and Client certificate archive package, since they both have client certificate's private key  
+  
+The Build/Release agent is just xplat tool runner, base on what user defined in their Build/Release definition, invoke different tools to finish user's job. So the client certificate support is not only for the agent infrastructure but most important for all different tools and technologies user might use during a Build/Release job.
+```
+   Ex:
+      Clone Git repository from TFS use Git
+      Sync TFVC repository from TFS use Tf.exe on Windows and Tf on Linux/OSX
+      Write customer Build/Release task that make REST call to TFS use VSTS-Task-Lib (PowerShell or Node.js)
+      Consume Nuget/NPM packages from TFS package management use Nuget.exe and Npm
+      Publish and consume artifacts from TFS artifact service use Drop.exe (artifact) and PDBSTR.exe (symbol)
+```
+
+You can use `OpenSSL` to get all pre-required certificates format ready easily as long as you have all pieces of information.
+
+#### Windows
+
+    Windows has a pretty good built-in certificate manger, the `Windows Certificate Manager`, it will make most Windows based application deal with certificate problem easily. However, most Linux background application (Git) and technologies (Node.js) won't check the `Windows Certificate Manager`, they just expect all certificates are just a file on disk.  
+    1. Export CA certificate from `Trusted CA Store`, use `Base64 Encoding X.509 (.CER)` format.
+    2. 
+    
 In short:  
 Agent version 2.121.0 or above  
   - Pass `--proxyurl`, `--proxyusername` and `--proxypassword` during agent configuration.   
