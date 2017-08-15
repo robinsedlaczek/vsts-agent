@@ -48,48 +48,36 @@ At this point, you should have all required pieces `ca.pem`, `client-cert.pem`, 
 
 ### No-Windows
 
-As I mentioned before, most Linux backgroud application just expect all certificate related files are on disk, and use `OpenSSL` to deal with cert is quiet common on Liunx, so I assume for customer who wants to setup Build/Release agent on Linux already has `ca.pem`, `client-cert.pem` and `client-cert-key.pem` in place.
+As I mentioned before, most Linux backgroud application just expect all certificate related files are on disk, and use `OpenSSL` to deal with cert is quiet common on Liunx, so I assume for customer who wants to setup Build/Release agent on Linux already has `ca.pem`, `client-cert.pem` and `client-cert-key.pem` in place. So the only missing piece should be the client cert archive `.pfx` file.  
+```
+    From Terminal
+    openssl pkcs12 -export -out client-cert-archive.pfx -passout pass:<YOURCERTPASSWORD> -inkey client-cert-key.pem -in client-cert-pem -passin pass:<YOURCERTPASSWORD> -certfile CA.pem
+```
 
-  - Pass `--proxyurl`, `--proxyusername` and `--proxypassword` during agent configuration.   
-    Ex:
-    ```
-    ./config.cmd --proxyurl http://127.0.0.1:8888 --proxyusername "1" --proxypassword "1"
-    ```
-    We store your proxy credential securely on each platform.  
-    Ex:
-    ```
-      Windows: Windows Credential Store
-      OSX: OSX Keychain
-      Linux: Encrypted with symmetric key based on machine id
-    ```
-  - Create a `.proxybypass` file under agent root to specify proxy bypass Url's Regex (ECMAScript syntax).  
-    Ex:
-    ```
-    github\.com
-    bitbucket\.com
-    ```
-Before 2.121.0
-  - Create a `.proxy` file under agent root to specify proxy url.  
-    Ex:
-    ```
-    http://127.0.0.1:8888
-    ```
-  - For authenticate proxy set environment variables `VSTS_HTTP_PROXY_USERNAME` and `VSTS_HTTP_PROXY_PASSWORD` for proxy credential before start agent process.
-  - Create a `.proxybypass` file under agent root to specify proxy bypass Url's Regex (ECMAScript syntax).  
-    Ex:
-    ```
-    github\.com
-    bitbucket\.com
-    ```
+## Configuration
 
-## How agent handle proxy within a Build/Release job
+Pass `--sslcacert`, `--sslclientcert`, `--sslclientcertkey`. `--sslclientcertarchive` and `--sslclientcertpassword` during agent configuration.   
+Ex:
+```batch
+    .\config.cmd --sslcacert .\enterprise.pem --sslclientcert .\client.pem --sslclientcertkey .\clientcert-key-pass.pem --sslclientcertarchive .\clientcert-2.pfx --sslclientcertpassword "test123"
+```  
 
-After configuring proxy for agent, agent infrastructure will start talk to VSTS/TFS service through the web proxy specified in the `.proxy` file.  
+We store your client cert private key password securely on each platform.  
+Ex:
+```
+   Windows: Windows Credential Store
+   OSX: OSX Keychain
+   Linux: Encrypted with symmetric key based on machine id
+```
 
-Since the code for `Get Source` step in build job and `Download Artifact` step in release job are also bake into agent, those steps will also follow the agent proxy configuration from `.proxy` file.  
+## How agent handle client cert within a Build/Release job
 
-Agent will expose proxy configuration via environment variables for every task execution, task author need to use `vsts-task-lib` methods to retrieve back proxy configuration and handle proxy with their task.
+After configuring client cert for agent, agent infrastructure will start talk to VSTS/TFS service using the client cert configured.  
 
-## Get proxy configuration by using [VSTS-Task-Lib](https://github.com/Microsoft/vsts-task-lib) method
+Since the code for `Get Source` step in build job and `Download Artifact` step in release job are also bake into agent, those steps will also follow the agent client cert configuration.  
 
-Please reference [VSTS-Task-Lib doc](https://github.com/Microsoft/vsts-task-lib/blob/master/node/docs/proxy.md) for detail
+Agent will expose client cert configuration via environment variables for every task execution, task author need to use `vsts-task-lib` methods to retrieve back client cert configuration and handle client cert with their task.
+
+## Get client cert configuration by using [VSTS-Task-Lib](https://github.com/Microsoft/vsts-task-lib) method
+
+Please reference [VSTS-Task-Lib doc](https://github.com/Microsoft/vsts-task-lib/blob/master/node/docs/cert.md) for detail
