@@ -12,7 +12,7 @@
   - CA root certificate in `.pem` format (This should contains the public key and signature of the CA root certificate)  
   - Client certificate in `.pem` format (This should contains the public key and signature of the Client certificate)  
   - Client certificate private key in `.pem` format (This should contains only the private key of the Client certificate)  
-  - Client certificate archive package in `.pfx` format (This should contains the signature, public key and private key of the Client certificate)  
+  - Client certificate archive package in `.pfx` format (This should contains the signature, public key and private key of the Client certificate, we can get rid of this when we adopt netcore 2.0.)  
   - Use `SAME` password to protect Client certificate private key and Client certificate archive package, since they both have client certificate's private key  
   
 The Build/Release agent is just xplat tool runner, base on what user defined in their Build/Release definition, invoke different tools to finish user's job. So the client certificate support is not only for the agent infrastructure but most important for all different tools and technologies user might use during a Build/Release job.
@@ -22,7 +22,7 @@ The Build/Release agent is just xplat tool runner, base on what user defined in 
       Sync TFVC repository from TFS use Tf.exe on Windows and Tf on Linux/OSX
       Write customer Build/Release task that make REST call to TFS use VSTS-Task-Lib (PowerShell or Node.js)
       Consume Nuget/NPM packages from TFS package management use Nuget.exe and Npm
-      Publish and consume artifacts from TFS artifact service use Drop.exe (artifact) and PDBSTR.exe (symbol)
+      [Future] Publish and consume artifacts from TFS artifact service use Drop.exe (artifact) and PDBSTR.exe (symbol)
 ```
 
 You can use `OpenSSL` to get all pre-required certificates format ready easily as long as you have all pieces of information.
@@ -30,9 +30,26 @@ You can use `OpenSSL` to get all pre-required certificates format ready easily a
 ### Windows
 
 Windows has a pretty good built-in certificate manger, the `Windows Certificate Manager`, it will make most Windows based application deal with certificate problem easily. However, most Linux background application (Git) and technologies (Node.js) won't check the `Windows Certificate Manager`, they just expect all certificates are just a file on disk.  
-    - Export CA certificate from `Trusted CA Store`, use `Base64 Encoding X.509 (.CER)` format.
 
+Use the following step to setup pre-reqs on Windows, assume you already installed your corporation's `CA root cert` into local machine's `Trusted CA Store`, and you have your client cert `clientcert.pfx` file on disk and you know the `password` for it.  
+
+    - Export CA cert from `Trusted CA Store`, use `Base64 Encoding X.509 (.CER)` format, name the export cert to something like `ca.pem`.  
+    - Extract Client cert and Client cert private key from `.pfx` file. You need `OpenSSL` to do this, you either install `OpenSSL for Windows` or just use `Git Bash`, since `Git Bash` has `OpenSSL` baked in.
+    ```
+    Inside Git Bash:    
+      Extract client-cert.pem
+      openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nokeys -out client-cert.pem
+      
+      Extract client-cert-key.pem, this will get password protected
+      openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nocerts -out client-cert-key.pem -passout pass:<YOURCERTPASSWORD> -nodes 
+    ```
     
+At this point, you should have all required pieces `ca.pem`, `client-cert.pem`, `client-cert-key.pem` and `clientcert.pfx`.
+
+### No-Windows
+
+As I mentioned before, most Linux backgroud application just expect all certificate related files are on disk, and use `OpenSSL` to deal with cert is quiet common on Liunx, so I assume for customer who wants to setup Build/Release agent on Linux already has `ca.pem`, `client-cert.pem` and `client-cert-key.pem` in place.
+
   - Pass `--proxyurl`, `--proxyusername` and `--proxypassword` during agent configuration.   
     Ex:
     ```
