@@ -37,10 +37,10 @@ Use the following step to setup pre-reqs on Windows, assume you already installe
 ```
 Inside Git Bash:    
   Extract client-cert.pem
-  openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nokeys -out client-cert.pem
+  openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nokeys -clcerts -out client-cert.pem
       
   Extract client-cert-key.pem, this will get password protected
-  openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nocerts -out client-cert-key.pem -passout pass:<YOURCERTPASSWORD> -nodes 
+  openssl pkcs12 -in clientcert.pfx -passin pass:<YOURCERTPASSWORD> -nocerts -out client-cert-key.pem -passout pass:<YOURCERTPASSWORD> 
 ```
     
 At this point, you should have all required pieces `ca.pem`, `client-cert.pem`, `client-cert-key.pem` and `clientcert.pfx`.
@@ -50,7 +50,7 @@ At this point, you should have all required pieces `ca.pem`, `client-cert.pem`, 
 As I mentioned before, most Linux backgroud application just expect all certificate related files are on disk, and use `OpenSSL` to deal with cert is quiet common on Liunx, so I assume for customer who wants to setup Build/Release agent on Linux already has `ca.pem`, `client-cert.pem` and `client-cert-key.pem` in place. So the only missing piece should be the client cert archive `.pfx` file.  
 ```
 From Terminal:
-openssl pkcs12 -export -out client-cert-archive.pfx -passout pass:<YOURCERTPASSWORD> -inkey client-cert-key.pem -in client-cert-pem -passin pass:<YOURCERTPASSWORD> -certfile CA.pem
+openssl pkcs12 -export -out client-cert-archive.pfx -passout pass:<YOURCERTPASSWORD> -inkey client-cert-key.pem -in client-cert.pem -passin pass:<YOURCERTPASSWORD> -certfile CA.pem
 ```
 
 ## Configuration
