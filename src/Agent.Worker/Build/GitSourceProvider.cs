@@ -17,6 +17,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 
         // external git repository won't use auth header cmdline arg, since we don't know the auth scheme.
         public override bool UseAuthHeaderCmdlineArg => false;
+        public override bool GitLfsUseAuthHeaderCmdlineArg => false;
 
         public override void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint)
         {
@@ -41,6 +42,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 // v2.9 git exist use auth header for github repository.
                 ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
                 return _gitCommandManager.EnsureGitVersion(_minGitVersionSupportAuthHeader, throwOnNotMatch: false);
+            }
+        }
+
+        public override bool GitLfsUseAuthHeaderCmdlineArg
+        {
+            get
+            {
+                // v2.1 git-lfs exist use auth header for github repository.
+                ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
+                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
             }
         }
 
@@ -77,6 +88,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             }
         }
 
+        public override bool GitLfsUseAuthHeaderCmdlineArg
+        {
+            get
+            {
+                // v2.1 git-lfs exist use auth header for github repository.
+                ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
+                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
+            }
+        }
+
         public override void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint)
         {
             // no-opt for Bitbucket repo, there is no additional requirements.
@@ -106,6 +127,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 // v2.9 git exist use auth header for tfsgit repository.
                 ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
                 return _gitCommandManager.EnsureGitVersion(_minGitVersionSupportAuthHeader, throwOnNotMatch: false);
+            }
+        }
+
+        public override bool GitLfsUseAuthHeaderCmdlineArg
+        {
+            get
+            {
+                // v2.1 git-lfs exist use auth header for github repository.
+                ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
+                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
             }
         }
 
@@ -183,6 +214,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         protected Version _minGitLfsVersionSupportAuthHeader = new Version(2, 1);
 
         public abstract bool UseAuthHeaderCmdlineArg { get; }
+        public abstract bool GitLfsUseAuthHeaderCmdlineArg { get; }
         public abstract void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint);
         public abstract string GenerateAuthHeader(string username, string password);
 
@@ -278,7 +310,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             await _gitCommandManager.LoadGitExecutionInfo(executionContext, useBuiltInGit: !preferGitFromPath);
 
             // Make sure the build machine met all requirements for the git repository
-            // For now, the only requirement we have is git version greater than 2.9 for on-prem tfsgit
+            // For now, the requirement we have is git version greater than 2.9  and git-lfs version greater than 2.1 for on-prem tfsgit
             RequirementCheck(executionContext, endpoint);
 
             // retrieve credential from endpoint.
@@ -528,14 +560,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 if (gitLfsSupport)
                 {
                     // Initialize git lfs by execute 'git lfs install'
-                    executionContext.Debug("Detect git-lfs version");
-                    int exitCode_lfsVersion = await _gitCommandManager.GitLFSVersion(executionContext, targetPath);
-                    if (exitCode_lfsVersion != 0)
-                    {
-                        throw new InvalidOperationException($"Can't detect Git-lfs version, 'git lfs version' failed with exit code: {exitCode_lfsVersion}");
-                    }
-
-                    // Initialize git lfs by execute 'git lfs install'
                     executionContext.Debug("Setup the local Git hooks for Git LFS.");
                     int exitCode_lfsInstall = await _gitCommandManager.GitLFSInstall(executionContext, targetPath);
                     if (exitCode_lfsInstall != 0)
@@ -543,26 +567,33 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                         throw new InvalidOperationException($"Git-lfs installation failed with exit code: {exitCode_lfsInstall}");
                     }
 
-                    // Inject credential into lfs fetch/push url
-                    executionContext.Debug("Inject credential into git-lfs remote url.");
-                    ArgUtil.NotNull(_gitLfsUrlWithCred, nameof(_gitLfsUrlWithCred));
-
-                    // inject credential into fetch url
-                    executionContext.Debug("Inject credential into git-lfs remote fetch url.");
-                    _configModifications["remote.origin.lfsurl"] = _gitLfsUrlWithCred.AbsoluteUri;
-                    int exitCode_configlfsurl = await _gitCommandManager.GitConfig(executionContext, targetPath, "remote.origin.lfsurl", _gitLfsUrlWithCred.AbsoluteUri);
-                    if (exitCode_configlfsurl != 0)
+                    if (GitLfsUseAuthHeaderCmdlineArg)
                     {
-                        throw new InvalidOperationException($"Git config failed with exit code: {exitCode_configlfsurl}");
+                        additionalLfsFetchArgs.Add($"-c http.extraheader=\"AUTHORIZATION: {GenerateAuthHeader(username, password)}\"");
                     }
-
-                    // inject credential into push url
-                    executionContext.Debug("Inject credential into git-lfs remote push url.");
-                    _configModifications["remote.origin.lfspushurl"] = _gitLfsUrlWithCred.AbsoluteUri;
-                    int exitCode_configlfspushurl = await _gitCommandManager.GitConfig(executionContext, targetPath, "remote.origin.lfspushurl", _gitLfsUrlWithCred.AbsoluteUri);
-                    if (exitCode_configlfspushurl != 0)
+                    else
                     {
-                        throw new InvalidOperationException($"Git config failed with exit code: {exitCode_configlfspushurl}");
+                        // Inject credential into lfs fetch/push url
+                        executionContext.Debug("Inject credential into git-lfs remote url.");
+                        ArgUtil.NotNull(_gitLfsUrlWithCred, nameof(_gitLfsUrlWithCred));
+
+                        // inject credential into fetch url
+                        executionContext.Debug("Inject credential into git-lfs remote fetch url.");
+                        _configModifications["remote.origin.lfsurl"] = _gitLfsUrlWithCred.AbsoluteUri;
+                        int exitCode_configlfsurl = await _gitCommandManager.GitConfig(executionContext, targetPath, "remote.origin.lfsurl", _gitLfsUrlWithCred.AbsoluteUri);
+                        if (exitCode_configlfsurl != 0)
+                        {
+                            throw new InvalidOperationException($"Git config failed with exit code: {exitCode_configlfsurl}");
+                        }
+
+                        // inject credential into push url
+                        executionContext.Debug("Inject credential into git-lfs remote push url.");
+                        _configModifications["remote.origin.lfspushurl"] = _gitLfsUrlWithCred.AbsoluteUri;
+                        int exitCode_configlfspushurl = await _gitCommandManager.GitConfig(executionContext, targetPath, "remote.origin.lfspushurl", _gitLfsUrlWithCred.AbsoluteUri);
+                        if (exitCode_configlfspushurl != 0)
+                        {
+                            throw new InvalidOperationException($"Git config failed with exit code: {exitCode_configlfspushurl}");
+                        }
                     }
                 }
             }
