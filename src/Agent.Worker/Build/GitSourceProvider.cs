@@ -131,10 +131,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 onPremTfsGit = StringUtil.ConvertToBoolean(onPremTfsGitString);
             }
 
-            // only ensure git version for on-prem tfsgit.
+            // only ensure git version and git-lfs version for on-prem tfsgit.
             if (onPremTfsGit.Value)
             {
                 _gitCommandManager.EnsureGitVersion(_minGitVersionSupportAuthHeader, throwOnNotMatch: true);
+
+                bool gitLfsSupport = false;
+                if (endpoint.Data.ContainsKey("GitLfsSupport"))
+                {
+                    gitLfsSupport = StringUtil.ConvertToBoolean(endpoint.Data["GitLfsSupport"]);
+                }
+                // prefer feature variable over endpoint data
+                gitLfsSupport = executionContext.Variables.GetBoolean(Constants.Variables.Features.GitLfsSupport) ?? gitLfsSupport;
+
+                if (gitLfsSupport)
+                {
+                    _gitCommandManager.EnsureGitLFSVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: true);
+                }
             }
         }
 
@@ -165,6 +178,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 
         // min git version that support add extra auth header.
         protected Version _minGitVersionSupportAuthHeader = new Version(2, 9);
+
+        // min git-lfs version that support add extra auth header.
+        protected Version _minGitLfsVersionSupportAuthHeader = new Version(2, 1);
 
         public abstract bool UseAuthHeaderCmdlineArg { get; }
         public abstract void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint);
