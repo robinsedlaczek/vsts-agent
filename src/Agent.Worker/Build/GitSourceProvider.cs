@@ -16,7 +16,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         public override string RepositoryType => WellKnownRepositoryTypes.Git;
 
         // external git repository won't use auth header cmdline arg, since we don't know the auth scheme.
-        public override bool UseAuthHeaderCmdlineArg => false;
+        public override bool GitUseAuthHeaderCmdlineArg => false;
         public override bool GitLfsUseAuthHeaderCmdlineArg => false;
 
         public override void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint)
@@ -35,7 +35,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
     {
         public override string RepositoryType => WellKnownRepositoryTypes.GitHub;
 
-        public override bool UseAuthHeaderCmdlineArg
+        public override bool GitUseAuthHeaderCmdlineArg
         {
             get
             {
@@ -51,7 +51,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 // v2.1 git-lfs exist use auth header for github repository.
                 ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
-                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
+                return _gitCommandManager.EnsureGitLFSVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
             }
         }
 
@@ -78,7 +78,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         // TODO: Replace this with correct type lookup WellKnownRepositoryTypes.Bitbucket
         public override string RepositoryType => "Bitbucket";
 
-        public override bool UseAuthHeaderCmdlineArg
+        public override bool GitUseAuthHeaderCmdlineArg
         {
             get
             {
@@ -94,7 +94,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 // v2.1 git-lfs exist use auth header for github repository.
                 ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
-                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
+                return _gitCommandManager.EnsureGitLFSVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
             }
         }
 
@@ -120,7 +120,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
     {
         public override string RepositoryType => WellKnownRepositoryTypes.TfsGit;
 
-        public override bool UseAuthHeaderCmdlineArg
+        public override bool GitUseAuthHeaderCmdlineArg
         {
             get
             {
@@ -136,7 +136,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 // v2.1 git-lfs exist use auth header for github repository.
                 ArgUtil.NotNull(_gitCommandManager, nameof(_gitCommandManager));
-                return _gitCommandManager.EnsureGitVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
+                return _gitCommandManager.EnsureGitLFSVersion(_minGitLfsVersionSupportAuthHeader, throwOnNotMatch: false);
             }
         }
 
@@ -213,7 +213,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         // min git-lfs version that support add extra auth header.
         protected Version _minGitLfsVersionSupportAuthHeader = new Version(2, 1);
 
-        public abstract bool UseAuthHeaderCmdlineArg { get; }
+        public abstract bool GitUseAuthHeaderCmdlineArg { get; }
         public abstract bool GitLfsUseAuthHeaderCmdlineArg { get; }
         public abstract void RequirementCheck(IExecutionContext executionContext, ServiceEndpoint endpoint);
         public abstract string GenerateAuthHeader(string username, string password);
@@ -519,7 +519,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 // v2.9 git support provide auth header as cmdline arg. 
                 // as long 2.9 git exist, VSTS repo, TFS repo and Github repo will use this to handle auth challenge. 
-                if (UseAuthHeaderCmdlineArg)
+                if (GitUseAuthHeaderCmdlineArg)
                 {
                     additionalFetchArgs.Add($"-c http.extraheader=\"AUTHORIZATION: {GenerateAuthHeader(username, password)}\"");
                 }
@@ -672,7 +672,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 List<string> additionalSubmoduleUpdateArgs = new List<string>();
                 if (!_selfManageGitCreds)
                 {
-                    if (UseAuthHeaderCmdlineArg)
+                    if (GitUseAuthHeaderCmdlineArg)
                     {
                         string authorityUrl = repositoryUrl.AbsoluteUri.Replace(repositoryUrl.PathAndQuery, string.Empty);
                         additionalSubmoduleUpdateArgs.Add($"-c http.{authorityUrl}.extraheader=\"AUTHORIZATION: {GenerateAuthHeader(username, password)}\"");
@@ -697,7 +697,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             // handle expose creds, related to 'Allow Scripts to Access OAuth Token' option
             if (!_selfManageGitCreds)
             {
-                if (UseAuthHeaderCmdlineArg && exposeCred)
+                if (GitUseAuthHeaderCmdlineArg && exposeCred)
                 {
                     string configKey = $"http.{repositoryUrl.AbsoluteUri}.extraheader";
                     string configValue = $"\"AUTHORIZATION: {GenerateAuthHeader(username, password)}\"";
@@ -709,7 +709,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                 }
 
-                if (!UseAuthHeaderCmdlineArg && !exposeCred)
+                if (!GitUseAuthHeaderCmdlineArg && !exposeCred)
                 {
                     // remove cached credential from origin's fetch/push url.
                     await RemoveCachedCredential(executionContext, targetPath, repositoryUrl, "origin");
@@ -735,8 +735,26 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                 }
 
-                if (gitLfsSupport && !exposeCred)
+                if (gitLfsSupport)
                 {
+                    if (GitLfsUseAuthHeaderCmdlineArg && exposeCred)
+                    {
+                        string configKey = $"http.{repositoryUrl.AbsoluteUri}.extraheader";
+                        string configValue = $"\"AUTHORIZATION: {GenerateAuthHeader(username, password)}\"";
+                        _configModifications[configKey] = configValue.Trim('\"');
+                        int exitCode_config = await _gitCommandManager.GitConfig(executionContext, targetPath, configKey, configValue);
+                        if (exitCode_config != 0)
+                        {
+                            throw new InvalidOperationException($"Git config failed with exit code: {exitCode_config}");
+                        }
+                    }
+
+                    if (!GitLfsUseAuthHeaderCmdlineArg && !exposeCred)
+                    {
+                        // remove cached credential from origin's fetch/push url.
+                        await RemoveCachedCredential(executionContext, targetPath, repositoryUrl, "origin");
+                    }
+
                     executionContext.Debug("Remove git-lfs fetch and push url setting from git config.");
                     await RemoveGitConfig(executionContext, targetPath, "remote.origin.lfsurl", _gitLfsUrlWithCred.AbsoluteUri);
                     _configModifications.Remove("remote.origin.lfsurl");

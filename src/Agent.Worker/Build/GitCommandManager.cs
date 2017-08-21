@@ -75,7 +75,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         Task<int> GitDisableAutoGC(IExecutionContext context, string repositoryPath);
 
         // git lfs version
-        Task<int> GitLFSVersion(IExecutionContext context, string repositoryPath);
+        Task<Version> GitLfsVersion(IExecutionContext context);
 
         // git lfs install --local
         Task<int> GitLFSInstall(IExecutionContext context, string repositoryPath);
@@ -96,8 +96,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 #endif
         private string _gitHttpUserAgentEnv = null;
         private string _gitPath = null;
-        private string _gitLfsPath = null;
         private Version _gitVersion = null;
+        private string _gitLfsPath = null;
         private Version _gitLfsVersion = null;
 
         public bool EnsureGitVersion(Version requiredVersion, bool throwOnNotMatch)
@@ -153,19 +153,21 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 
             ArgUtil.File(_gitPath, nameof(_gitPath));
 
-            // Resolve the location of git-lfs.
-            _gitLfsPath = whichUtil.Which("git-lfs", require: false);
-
             // Get the Git version.    
             _gitVersion = await GitVersion(context);
             ArgUtil.NotNull(_gitVersion, nameof(_gitVersion));
             context.Debug($"Detect git version: {_gitVersion.ToString()}.");
 
+            // Resolve the location of git-lfs.
+            // This should be best effort since checkout lfs objects is an option.
+            // We will check and ensure git-lfs version later
+            _gitLfsPath = whichUtil.Which("git-lfs", require: false);
+
             // Get the Git-LFS version if git-lfs exist in %PATH%.
             if (!string.IsNullOrEmpty(_gitLfsPath))
             {
                 _gitLfsVersion = await GitLfsVersion(context);
-                context.Debug($"Detect git-lfs version: {_gitLfsVersion?.ToString()}.");
+                context.Debug($"Detect git-lfs version: '{_gitLfsVersion?.ToString() ?? string.Empty}'.");
             }
 
             // required 2.0, all git operation commandline args need min git version 2.0
@@ -399,13 +401,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             return await ExecuteGitCommandAsync(context, repositoryPath, "config", "gc.auto 0");
         }
 
-        // git lfs version
-        public async Task<int> GitLFSVersion(IExecutionContext context, string repositoryPath)
-        {
-            context.Debug("Get git-lfs version.");
-            return await ExecuteGitCommandAsync(context, repositoryPath, "lfs", "version");
-        }
-
         // git lfs install --local
         public async Task<int> GitLFSInstall(IExecutionContext context, string repositoryPath)
         {
@@ -451,7 +446,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             return version;
         }
 
-        // git-lfs version
+        // git lfs version
         public async Task<Version> GitLfsVersion(IExecutionContext context)
         {
             context.Debug("Get git-lfs version.");
